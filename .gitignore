@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test / lint caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS / editor
+.DS_Store
+.vscode/
+
+# Packaging
+*.egg-info/
+build/
+dist/
+
+# Generated project outputs
+results/
+
+# Generated / downloaded datasets
+data/
+
+# Logs / temporary files
+*.log
+*.tmp
