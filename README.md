@@ -7,7 +7,7 @@ The project includes:
 - a **CDK benchmark** using CDK1/CDK2/CDK4/CDK6
 - a **ROCK2 selectivity workflow** using ROCK2 as the primary target, ROCK1 as a critical anti-target, and additional kinases as profile targets
 
-The core package under `src/selectivity_pcm/` is target-agnostic. Example-specific target definitions, protein sequences, KLIFS pockets, and decision rules live outside the modelling code.
+The reusable code under `src/selectivity_pcm/` is target-agnostic. Target definitions, protein sequences, KLIFS pockets, and project-specific decision logic are kept outside the core package.
 
 ```text
 compound
@@ -42,7 +42,7 @@ ADVANCE / WATCH / DEPRIORITIZE
 ## Installation
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/crisslind/selectivity-pcm.git
 cd selectivity-pcm
 python -m pip install -e .
 ```
@@ -65,6 +65,11 @@ Python 3.11+ is currently required.
 
 ```text
 selectivity-pcm/
+├── docs/
+│   ├── custom_projects.md
+│   ├── methodology.md
+│   ├── model_benchmarks.md
+│   └── rock2_example.md
 ├── examples/
 │   ├── cdk/
 │   └── rock2/
@@ -75,7 +80,6 @@ selectivity-pcm/
 │   ├── features/
 │   └── models/
 ├── tests/
-├── docs/
 ├── pyproject.toml
 └── README.md
 ```
@@ -118,7 +122,7 @@ python scripts/check_klifs_panel_coverage.py
 python scripts/fetch_klifs_pockets.py
 ```
 
-Generated pocket definitions are stored under:
+The ROCK2 pocket configuration is stored in:
 
 ```text
 examples/rock2/kinase_pockets.py
@@ -127,7 +131,16 @@ examples/rock2/kinase_pockets.py
 ## 4. Run the pocket PCM model
 
 ```bash
-PYTHONPATH=. python scripts/run_rock2_pocket_pcm.py
+python scripts/run_rock2_pocket_pcm.py
+```
+
+The current feature representation combines:
+
+```text
+Morgan fingerprint              2048
+KLIFS pocket one-hot            1785
+------------------------------------
+Total                           3833
 ```
 
 Current 5-fold scaffold-CV benchmark:
@@ -142,7 +155,7 @@ Spearman   0.738
 ## 5. Run a pseudo-prospective holdout
 
 ```bash
-PYTHONPATH=. python scripts/run_prospective_holdout.py
+python scripts/run_prospective_holdout.py
 ```
 
 Current holdout performance:
@@ -156,16 +169,23 @@ R²     0.472
 ## 6. Build the final report
 
 ```bash
-PYTHONPATH=. python scripts/build_final_report.py
+python scripts/build_final_report.py
 ```
 
-The report includes primary potency, critical anti-target margin/risk, profile-target context, MPO ranking, and recommendation.
+The report combines:
+
+- primary-target potency
+- critical anti-target margin and risk
+- profile-target context
+- calibration support
+- MPO-style ranking
+- recommendation
 
 For the full ROCK2 walkthrough, see [`docs/rock2_example.md`](docs/rock2_example.md).
 
-# Predicting external compounds
+# Predict external compounds
 
-Prepare a CSV:
+Prepare a CSV such as:
 
 ```csv
 compound_id,smiles
@@ -176,13 +196,15 @@ compound_002,CN1CCN(...)
 Then run:
 
 ```bash
-PYTHONPATH=. python scripts/predict_external_compounds.py
-PYTHONPATH=. python scripts/build_external_report.py
+python scripts/predict_external_compounds.py
+python scripts/build_external_report.py
 ```
 
-# Using your own targets
+The external workflow trains on the curated dataset and predicts the configured target panel for unseen compounds.
 
-The core package is target-agnostic.
+# Use your own targets
+
+The core package is not restricted to ROCK2 or CDKs.
 
 A custom modelling table should contain at least:
 
@@ -223,11 +245,11 @@ overall_metrics, target_metrics, predictions = (
 )
 ```
 
-For a full guide, see [`docs/custom_projects.md`](docs/custom_projects.md).
+For a fuller guide to custom panels, pocket definitions, sequence PCM, and project-specific target roles, see [`docs/custom_projects.md`](docs/custom_projects.md).
 
 # Model choice
 
-The current default is `RandomForestRegressor`.
+The current default regressor is `RandomForestRegressor`.
 
 Using identical Morgan + KLIFS features and scaffold folds:
 
@@ -239,33 +261,76 @@ XGBoost        0.865   0.644   0.570   0.725
 ExtraTrees     1.110   0.749   0.292   0.613
 ```
 
-Random forest was retained because it performed best overall.
+Random Forest was retained because it performed best overall under the same scaffold-grouped validation scheme.
 
-See [`docs/model_benchmarks.md`](docs/model_benchmarks.md).
+See [`docs/model_benchmarks.md`](docs/model_benchmarks.md) for details.
+
+# Calibration and decision logic
+
+The workflow separates three concepts:
+
+```text
+prediction
+calibration
+decision
+```
+
+The model predicts pIC50.
+
+Out-of-fold historical predictions are then used for empirical potency and selectivity calibration.
+
+The decision layer combines model output, selectivity, uncertainty, and project-specific target priorities.
+
+Critical anti-targets can affect progression decisions directly, while profile targets provide broader context.
+
+See [`docs/methodology.md`](docs/methodology.md).
+
+# External validation
+
+The ROCK2 workflow was tested blindly on a small external series from public patent literature after checking for exact structure overlap with the training data.
+
+The model retained useful signal for ROCK2 potency ranking, but absolute potency and especially large ROCK2/ROCK1 selectivity differences were compressed toward the training-set mean.
+
+This is an important limitation:
+
+> Predictions should not be interpreted as reliable quantitative extrapolations for novel chemotypes without supporting calibration or experimental data.
 
 # Tests
 
+Install development dependencies:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+Run:
+
 ```bash
 pytest -q
+ruff check .
 ```
 
 The current tests cover core feature dimensions, selectivity-margin logic, and insufficient-calibration handling.
 
-# Important limitation
-
-The ROCK2 workflow was tested blindly on an external patent series. The model retained useful potency-ranking signal, but compressed absolute potency and especially large ROCK2/ROCK1 selectivity differences toward the training-set mean.
-
-Predictions should therefore not be treated as reliable quantitative extrapolations for novel chemotypes without supporting calibration or experimental data.
-
-See [`docs/methodology.md`](docs/methodology.md).
-
 # Documentation
 
-- [`docs/rock2_example.md`](docs/rock2_example.md) — full ROCK2 workflow
+- [`docs/rock2_example.md`](docs/rock2_example.md) — complete ROCK2 workflow
 - [`docs/custom_projects.md`](docs/custom_projects.md) — use your own targets and data
-- [`docs/model_benchmarks.md`](docs/model_benchmarks.md) — RF vs LightGBM/XGBoost/ExtraTrees
-- [`docs/methodology.md`](docs/methodology.md) — calibration, decision logic, reproducibility, limitations
+- [`docs/model_benchmarks.md`](docs/model_benchmarks.md) — model comparison
+- [`docs/methodology.md`](docs/methodology.md) — calibration, validation, decision logic, and limitations
+
+# Intended use
+
+`selectivity-pcm` is an experimental modelling toolkit for:
+
+- exploratory SAR analysis
+- model comparison
+- selectivity hypothesis generation
+- compound prioritization
+- uncertainty-aware review
+
+It is not intended to replace experimental potency or selectivity measurements.
 
 # License
 
-License to be added before release.
+MIT License. See [`LICENSE`](LICENSE).
